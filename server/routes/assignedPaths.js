@@ -5,7 +5,7 @@ import { generateTopicExplanation, isContentAIAvailable } from '../services/aiCo
 const router = Router();
 
 // Teacher assigns a learning path to a student
-router.post('/assign', (req, res) => {
+router.post('/assign', async (req, res) => {
   try {
     const { teacher_id, student_id, title, topics } = req.body;
 
@@ -14,11 +14,11 @@ router.post('/assign', (req, res) => {
     }
 
     // Verify teacher exists
-    const teacher = getOne('SELECT id FROM teachers WHERE id = ?', [teacher_id]);
+    const teacher = await getOne('SELECT id FROM teachers WHERE id = ?', [teacher_id]);
     if (!teacher) return res.status(404).json({ error: 'Teacher not found' });
 
     // Verify student exists
-    const student = getOne('SELECT id FROM students WHERE id = ?', [student_id]);
+    const student = await getOne('SELECT id FROM students WHERE id = ?', [student_id]);
     if (!student) return res.status(404).json({ error: 'Student not found' });
 
     // Clean topics
@@ -27,7 +27,7 @@ router.post('/assign', (req, res) => {
       return res.status(400).json({ error: 'At least one valid topic is required' });
     }
 
-    const result = runSQL(
+    const result = await runSQL(
       'INSERT INTO teacher_assigned_paths (teacher_id, student_id, title, topics_json) VALUES (?, ?, ?, ?)',
       [teacher_id, student_id, title.trim(), JSON.stringify(cleanedTopics)]
     );
@@ -48,10 +48,10 @@ router.post('/assign', (req, res) => {
 });
 
 // Get all assigned paths for a student
-router.get('/student/:studentId', (req, res) => {
+router.get('/student/:studentId', async (req, res) => {
   try {
     const studentId = parseInt(req.params.studentId);
-    const paths = getAll(
+    const paths = await getAll(
       'SELECT tap.*, t.name as teacher_name FROM teacher_assigned_paths tap JOIN teachers t ON t.id = tap.teacher_id WHERE tap.student_id = ? ORDER BY tap.assigned_at DESC',
       [studentId]
     );
@@ -79,7 +79,7 @@ router.get('/content/:pathId/:topicIndex', async (req, res) => {
     const topicIndex = parseInt(req.params.topicIndex);
 
     // Get the path
-    const path = getOne('SELECT * FROM teacher_assigned_paths WHERE id = ?', [pathId]);
+    const path = await getOne('SELECT * FROM teacher_assigned_paths WHERE id = ?', [pathId]);
     if (!path) return res.status(404).json({ error: 'Path not found' });
 
     const topics = JSON.parse(path.topics_json || '[]');
@@ -90,7 +90,7 @@ router.get('/content/:pathId/:topicIndex', async (req, res) => {
     const topicName = topics[topicIndex];
 
     // Check cache first
-    const cached = getOne(
+    const cached = await getOne(
       'SELECT * FROM assigned_path_content WHERE path_id = ? AND topic_index = ?',
       [pathId, topicIndex]
     );
@@ -133,7 +133,7 @@ router.get('/content/:pathId/:topicIndex', async (req, res) => {
     }
 
     // Cache the generated content
-    runSQL(
+    await runSQL(
       'INSERT INTO assigned_path_content (path_id, topic_index, topic_name, content) VALUES (?, ?, ?, ?)',
       [pathId, topicIndex, topicName, content]
     );

@@ -5,13 +5,13 @@ import { generateTeacherReport, isAIAvailable } from '../claude.js';
 const router = Router();
 
 // Teacher login (legacy PIN support + new auth)
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   try {
     const { username, password, pin } = req.body;
     
     // Support legacy PIN login
     if (pin) {
-      const teacher = getOne('SELECT * FROM teachers WHERE password = ?', [pin]);
+      const teacher = await getOne('SELECT * FROM teachers WHERE password = ?', [pin]);
       if (!teacher) return res.status(401).json({ error: 'Invalid PIN' });
       return res.json({ id: teacher.id, name: teacher.name, class_code: teacher.class_code, school: teacher.school, authenticated: true });
     }
@@ -19,7 +19,7 @@ router.post('/login', (req, res) => {
     // Username/password login
     if (!username || !password) return res.status(400).json({ error: 'Credentials required' });
 
-    const teacher = getOne('SELECT * FROM teachers WHERE username = ? AND password = ?', [username, password]);
+    const teacher = await getOne('SELECT * FROM teachers WHERE username = ? AND password = ?', [username, password]);
     if (!teacher) return res.status(401).json({ error: 'Invalid credentials' });
 
     res.json({ id: teacher.id, name: teacher.name, class_code: teacher.class_code, school: teacher.school, authenticated: true });
@@ -30,21 +30,21 @@ router.post('/login', (req, res) => {
 });
 
 // Get students for teacher's class only
-router.get('/students', (req, res) => {
+router.get('/students', async (req, res) => {
   try {
     const classCode = req.query.class_code;
     
     let students;
     if (classCode) {
       // Scoped to teacher's class
-      students = getAll('SELECT * FROM students WHERE class_code = ? ORDER BY created_at DESC', [classCode]);
+      students = await getAll('SELECT * FROM students WHERE class_code = ? ORDER BY created_at DESC', [classCode]);
     } else {
       // Fallback: show all (for demo)
-      students = getAll('SELECT * FROM students ORDER BY created_at DESC');
+      students = await getAll('SELECT * FROM students ORDER BY created_at DESC');
     }
     
     const summaries = students.map(student => {
-      const progress = getAll('SELECT * FROM topic_progress WHERE student_id = ?', [student.id]);
+      const progress = await getAll('SELECT * FROM topic_progress WHERE student_id = ?', [student.id]);
       
       const totalTopics = progress.length;
       const completedTopics = progress.filter(p => ['complete', 'strong', 'weak'].includes(p.status)).length;
@@ -102,21 +102,21 @@ router.get('/students', (req, res) => {
 });
 
 // Get detailed quiz scores for all students in a class
-router.get('/quiz-scores', (req, res) => {
+router.get('/quiz-scores', async (req, res) => {
   try {
     const classCode = req.query.class_code;
     
     let students;
     if (classCode) {
-      students = getAll('SELECT id, name, grade, board FROM students WHERE class_code = ? ORDER BY name ASC', [classCode]);
+      students = await getAll('SELECT id, name, grade, board FROM students WHERE class_code = ? ORDER BY name ASC', [classCode]);
     } else {
-      students = getAll('SELECT id, name, grade, board FROM students ORDER BY name ASC');
+      students = await getAll('SELECT id, name, grade, board FROM students ORDER BY name ASC');
     }
 
     const allScores = [];
     
     for (const student of students) {
-      const progress = getAll(
+      const progress = await getAll(
         'SELECT topic_name, quiz_score, attempts, status, weak_concepts, last_attempt FROM topic_progress WHERE student_id = ? AND quiz_score IS NOT NULL ORDER BY last_attempt DESC',
         [student.id]
       );
@@ -159,9 +159,9 @@ router.post('/ai-report', async (req, res) => {
 
     let students;
     if (class_code) {
-      students = getAll('SELECT * FROM students WHERE class_code = ? ORDER BY name ASC', [class_code]);
+      students = await getAll('SELECT * FROM students WHERE class_code = ? ORDER BY name ASC', [class_code]);
     } else {
-      students = getAll('SELECT * FROM students ORDER BY name ASC');
+      students = await getAll('SELECT * FROM students ORDER BY name ASC');
     }
 
     if (students.length === 0) {
@@ -173,7 +173,7 @@ router.post('/ai-report', async (req, res) => {
     const topicWeakMap = {};
 
     for (const student of students) {
-      const progress = getAll(
+      const progress = await getAll(
         'SELECT topic_name, quiz_score, attempts, status, weak_concepts FROM topic_progress WHERE student_id = ?',
         [student.id]
       );

@@ -4,7 +4,7 @@ import { runSQL, getOne } from '../db.js';
 const router = Router();
 
 // Student Signup
-router.post('/signup', (req, res) => {
+router.post('/signup', async (req, res) => {
   try {
     const { username, password, name, age, grade, board, goals, level, study_time, language, device_type, connectivity, class_code } = req.body;
     
@@ -13,18 +13,18 @@ router.post('/signup', (req, res) => {
     }
 
     // Check if username exists
-    const existing = getOne('SELECT id FROM students WHERE username = ?', [username]);
+    const existing = await getOne('SELECT id FROM students WHERE username = ?', [username]);
     if (existing) {
       return res.status(409).json({ error: 'Username already taken' });
     }
 
-    const result = runSQL(
+    const result = await runSQL(
       `INSERT INTO students (username, password, name, age, grade, board, goals, level, study_time, language, device_type, connectivity, class_code, last_active_date)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
       [username, password, name, age || null, grade || null, board || 'CBSE', goals || 'Math', level || 'beginner', study_time || '30 min', language || 'en', device_type || 'mobile', connectivity || '3g', class_code || '']
     );
 
-    const student = getOne('SELECT * FROM students WHERE id = ?', [result.lastInsertRowid]);
+    const student = await getOne('SELECT * FROM students WHERE id = ?', [result.lastInsertRowid]);
     res.status(201).json({ ...student, password: undefined });
   } catch (err) {
     console.error('Signup error:', err);
@@ -33,21 +33,21 @@ router.post('/signup', (req, res) => {
 });
 
 // Student Login
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password required' });
     }
 
-    const student = getOne('SELECT * FROM students WHERE username = ? AND password = ?', [username, password]);
+    const student = await getOne('SELECT * FROM students WHERE username = ? AND password = ?', [username, password]);
     if (!student) {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
     // Update last active
-    runSQL("UPDATE students SET last_active_date = datetime('now') WHERE id = ?", [student.id]);
-    runSQL('INSERT INTO sessions (student_id) VALUES (?)', [student.id]);
+    await runSQL("UPDATE students SET last_active_date = datetime('now') WHERE id = ?", [student.id]);
+    await runSQL('INSERT INTO sessions (student_id) VALUES (?)', [student.id]);
 
     res.json({ ...student, password: undefined });
   } catch (err) {
@@ -57,19 +57,19 @@ router.post('/login', (req, res) => {
 });
 
 // Teacher Signup
-router.post('/teacher/signup', (req, res) => {
+router.post('/teacher/signup', async (req, res) => {
   try {
     const { username, password, name, class_code, school } = req.body;
     if (!username || !password || !name || !class_code) {
       return res.status(400).json({ error: 'Username, password, name, and class code are required' });
     }
 
-    const existing = getOne('SELECT id FROM teachers WHERE username = ?', [username]);
+    const existing = await getOne('SELECT id FROM teachers WHERE username = ?', [username]);
     if (existing) {
       return res.status(409).json({ error: 'Username already taken' });
     }
 
-    runSQL(
+    await runSQL(
       'INSERT INTO teachers (username, password, name, class_code, school) VALUES (?, ?, ?, ?, ?)',
       [username, password, name, class_code, school || '']
     );
@@ -82,14 +82,14 @@ router.post('/teacher/signup', (req, res) => {
 });
 
 // Teacher Login
-router.post('/teacher/login', (req, res) => {
+router.post('/teacher/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password required' });
     }
 
-    const teacher = getOne('SELECT * FROM teachers WHERE username = ? AND password = ?', [username, password]);
+    const teacher = await getOne('SELECT * FROM teachers WHERE username = ? AND password = ?', [username, password]);
     if (!teacher) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }

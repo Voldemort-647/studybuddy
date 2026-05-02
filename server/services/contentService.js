@@ -1,4 +1,4 @@
-import { syllabusDB } from "../data/syllabusDB.js";
+import { getOne } from "../db.js";
 import {
   generateLessonWithAI,
   generateNotesWithAI,
@@ -14,32 +14,29 @@ function normalizeKey(value) {
   return String(value || "").trim().toLowerCase();
 }
 
-function resolveSubject(standard, subject) {
-  const subjects = Object.keys(syllabusDB[standard] || {});
-  return (
-    subjects.find((key) => normalizeKey(key) === normalizeKey(subject)) || null
-  );
-}
-
-function resolveChapter(standard, subject, chapter) {
-  const chapters = Object.keys(syllabusDB[standard]?.[subject] || {});
-  return (
-    chapters.find((key) => normalizeKey(key) === normalizeKey(chapter)) || null
-  );
-}
-
-function getLocalChapter(standardInput, subjectInput, chapterInput) {
+async function getLocalChapter(standardInput, subjectInput, chapterInput) {
   const standard = normalizeStandard(standardInput);
-  const subject = resolveSubject(standard, subjectInput);
-  if (!subject) return null;
-  const chapter = resolveChapter(standard, subject, chapterInput);
-  if (!chapter) return null;
+  const subject = normalizeKey(subjectInput);
+  const chapter = normalizeKey(chapterInput);
+
+  if (!standard || !subject || !chapter) return null;
+
+  const row = await getOne(
+    `SELECT * FROM syllabus_content WHERE standard = ? AND LOWER(subject) = ? AND LOWER(chapter) = ?`,
+    [standard, subject, chapter]
+  );
+
+  if (!row) return null;
 
   return {
-    standard,
-    subject,
-    chapter,
-    data: syllabusDB[standard][subject][chapter],
+    standard: row.standard,
+    subject: row.subject,
+    chapter: row.chapter,
+    data: {
+      lesson: row.lesson_text,
+      notes: JSON.parse(row.notes_json || "[]"),
+      quiz: JSON.parse(row.quiz_json || "[]")
+    }
   };
 }
 
@@ -58,7 +55,7 @@ export async function getLesson(standard, subject, chapter) {
       };
     }
     // AI failed — fall through to local with reason
-    const local = getLocalChapter(standard, subject, chapter);
+    const local = await getLocalChapter(standard, subject, chapter);
     if (local?.data?.lesson) {
       return {
         lesson: local.data.lesson,
@@ -72,7 +69,7 @@ export async function getLesson(standard, subject, chapter) {
   }
 
   // No AI key — use local directly
-  const local = getLocalChapter(standard, subject, chapter);
+  const local = await getLocalChapter(standard, subject, chapter);
   if (local?.data?.lesson) {
     return { lesson: local.data.lesson, source: "db", ai_powered: false, reason: null };
   }
@@ -95,7 +92,7 @@ export async function getNotes(standard, subject, chapter) {
       };
     }
     // AI failed — fall through to local with reason
-    const local = getLocalChapter(standard, subject, chapter);
+    const local = await getLocalChapter(standard, subject, chapter);
     if (local?.data?.notes) {
       return {
         notes: local.data.notes,
@@ -109,7 +106,7 @@ export async function getNotes(standard, subject, chapter) {
   }
 
   // No AI key — use local directly
-  const local = getLocalChapter(standard, subject, chapter);
+  const local = await getLocalChapter(standard, subject, chapter);
   if (local?.data?.notes) {
     return { notes: local.data.notes, source: "db", ai_powered: false, reason: null };
   }
@@ -132,7 +129,7 @@ export async function getQuiz(standard, subject, chapter) {
       };
     }
     // AI failed — fall through to local with reason
-    const local = getLocalChapter(standard, subject, chapter);
+    const local = await getLocalChapter(standard, subject, chapter);
     if (local?.data?.quiz) {
       return {
         quiz: local.data.quiz,
@@ -146,7 +143,7 @@ export async function getQuiz(standard, subject, chapter) {
   }
 
   // No AI key — use local directly
-  const local = getLocalChapter(standard, subject, chapter);
+  const local = await getLocalChapter(standard, subject, chapter);
   if (local?.data?.quiz) {
     return { quiz: local.data.quiz, source: "db", ai_powered: false, reason: null };
   }
@@ -154,6 +151,7 @@ export async function getQuiz(standard, subject, chapter) {
   throw new Error("Quiz content unavailable");
 }
 
-export function hasPrototypeChapter(standard, subject, chapter) {
-  return Boolean(getLocalChapter(standard, subject, chapter));
+export async function hasPrototypeChapter(standard, subject, chapter) {
+  const local = await getLocalChapter(standard, subject, chapter);
+  return Boolean(local);
 }
