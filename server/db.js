@@ -1,8 +1,12 @@
 import { createClient } from "@libsql/client";
 import dotenv from "dotenv";
 import { hashPassword } from "./authUtils.js";
+import path from "path";
+import { fileURLToPath } from "url";
 
+const serverDir = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config();
+dotenv.config({ path: path.join(serverDir, ".env") });
 
 const isVercel = process.env.VERCEL || process.env.VERCEL_ENV;
 

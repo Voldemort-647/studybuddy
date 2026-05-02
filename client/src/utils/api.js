@@ -31,11 +31,30 @@ function getCachedData(key) {
   return null;
 }
 
+async function readJson(res, fallbackMessage) {
+  const text = await res.text();
+  let data = null;
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      const preview = text.replace(/\s+/g, ' ').trim().slice(0, 120);
+      throw new Error(`${fallbackMessage}. Server returned non-JSON response${preview ? `: ${preview}` : ''}`);
+    }
+  }
+
+  if (!res.ok) {
+    throw new Error(data?.error || fallbackMessage);
+  }
+
+  return data;
+}
+
 // ===== AUTH =====
 export async function studentSignup(profile) {
   const res = await fetch(`${API_BASE}/auth/signup`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(profile) });
-  if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Signup failed'); }
-  const student = await res.json();
+  const student = await readJson(res, 'Signup failed');
   localStorage.setItem('pw_student_id', student.id);
   localStorage.setItem('pw_user_role', 'student');
   cacheData(`student_${student.id}`, student);
@@ -44,8 +63,7 @@ export async function studentSignup(profile) {
 
 export async function studentLogin(username, password) {
   const res = await fetch(`${API_BASE}/auth/login`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ username, password }) });
-  if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Login failed'); }
-  const student = await res.json();
+  const student = await readJson(res, 'Login failed');
   localStorage.setItem('pw_student_id', student.id);
   localStorage.setItem('pw_user_role', 'student');
   cacheData(`student_${student.id}`, student);
@@ -54,14 +72,12 @@ export async function studentLogin(username, password) {
 
 export async function teacherSignup(profile) {
   const res = await fetch(`${API_BASE}/auth/teacher/signup`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(profile) });
-  if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Signup failed'); }
-  return await res.json();
+  return await readJson(res, 'Signup failed');
 }
 
 export async function teacherLoginAuth(username, password) {
   const res = await fetch(`${API_BASE}/auth/teacher/login`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ username, password }) });
-  if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Login failed'); }
-  const teacher = await res.json();
+  const teacher = await readJson(res, 'Login failed');
   localStorage.setItem('pw_teacher', JSON.stringify(teacher));
   localStorage.setItem('pw_user_role', 'teacher');
   return teacher;
