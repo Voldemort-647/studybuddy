@@ -366,6 +366,12 @@ a { text-decoration: none; color: inherit; }
   font-family: var(--font-display); font-weight: 900; font-size: 22px; color: #fff;
   box-shadow: 0 8px 24px var(--saffronGlow);
 }
+.login-brand-logo {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
 .login-brand-text { font-family: var(--font-display); font-weight: 900; font-size: 22px; color: #fff; letter-spacing: -0.5px; }
 .login-brand-text span { color: var(--saffron); }
 
