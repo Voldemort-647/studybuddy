@@ -8,6 +8,7 @@ dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '.
 import express from 'express';
 import cors from 'cors';
 import './db.js';
+import { getDatabaseStatus } from './db.js';
 
 const app = express();
 const PORT = 3001;
@@ -17,7 +18,7 @@ app.use(express.json({ limit: '10mb' }));
 
 // Health endpoint for connectivity check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: Date.now() });
+  res.json({ status: 'ok', timestamp: Date.now(), database: getDatabaseStatus() });
 });
 
 // Import routes
@@ -42,6 +43,11 @@ app.use('/api/lesson', lessonRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/assigned-paths', assignedPathsRoutes);
+
+app.use('/api', (err, req, res, next) => {
+  console.error('API error:', err);
+  res.status(500).json({ error: err.message || 'Server error' });
+});
 
 // Vercel doesn't use app.listen, it intercepts exports
 const isVercel = process.env.VERCEL || process.env.VERCEL_ENV;

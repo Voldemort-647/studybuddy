@@ -13,23 +13,37 @@ const isVercel = process.env.VERCEL || process.env.VERCEL_ENV;
 const url = process.env.TURSO_DATABASE_URL;
 const authToken = process.env.TURSO_AUTH_TOKEN;
 
-if (!url || !authToken) {
-  console.error("Missing TURSO_DATABASE_URL or TURSO_AUTH_TOKEN in environment variables.");
-  process.exit(1);
+export const db = url && authToken ? createClient({ url, authToken }) : null;
+
+export function getDatabaseStatus() {
+  return {
+    configured: Boolean(db),
+    missing: {
+      TURSO_DATABASE_URL: !url,
+      TURSO_AUTH_TOKEN: !authToken,
+    },
+  };
 }
 
-export const db = createClient({
-  url,
-  authToken,
-});
+function requireDatabase() {
+  if (!db) {
+    const missing = Object.entries(getDatabaseStatus().missing)
+      .filter(([, isMissing]) => isMissing)
+      .map(([key]) => key)
+      .join(', ');
+    throw new Error(`Database is not configured. Missing ${missing}.`);
+  }
+
+  return db;
+}
 
 export async function runSQL(sql, params = []) {
-  const result = await db.execute({ sql, args: params });
+  const result = await requireDatabase().execute({ sql, args: params });
   return { changes: result.rowsAffected, lastInsertRowid: Number(result.lastInsertRowid || 0) };
 }
 
 export async function getOne(sql, params = []) {
-  const result = await db.execute({ sql, args: params });
+  const result = await requireDatabase().execute({ sql, args: params });
   if (result.rows.length > 0) {
     return result.rows[0];
   }
@@ -37,13 +51,13 @@ export async function getOne(sql, params = []) {
 }
 
 export async function getAll(sql, params = []) {
-  const result = await db.execute({ sql, args: params });
+  const result = await requireDatabase().execute({ sql, args: params });
   return result.rows;
 }
 
 // Ensure tables exist on startup
 export async function initializeDatabase() {
-  await db.executeMultiple(`
+  await requireDatabase().executeMultiple(`
     CREATE TABLE IF NOT EXISTS students (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -169,6 +183,12 @@ export async function initializeDatabase() {
   console.log('✅ Turso Database initialized');
 }
 
-await initializeDatabase();
+if (db) {
+  await initializeDatabase().catch((err) => {
+    console.error('Database initialization failed:', err);
+  });
+} else {
+  console.error('Missing TURSO_DATABASE_URL or TURSO_AUTH_TOKEN in environment variables.');
+}
 
 export default db;
