@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { runSQL, getOne, getAll } from '../db.js';
 import { generatePath, isAIAvailable } from '../claude.js';
 import { localGeneratePath } from '../localAI.js';
+import { hashPassword, withoutPassword } from '../authUtils.js';
 
 const router = Router();
 
@@ -18,18 +19,19 @@ router.post('/', async (req, res) => {
         [name, age, grade, board || 'CBSE', goals, level, study_time, language, device_type || 'mobile', connectivity || '3g', id]
       );
       const student = await getOne('SELECT * FROM students WHERE id = ?', [id]);
-      return res.json({ ...student, password: undefined });
+      return res.json(withoutPassword(student));
     }
 
     // Legacy: create without auth (backward compat)
+    const passwordHash = await hashPassword('1234');
     const result = await runSQL(
       `INSERT INTO students (username, password, name, age, grade, board, goals, level, study_time, language, device_type, connectivity, last_active_date)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-      [`student_${Date.now()}`, '1234', name, age, grade, board || 'CBSE', goals, level, study_time, language, device_type || 'mobile', connectivity || '3g']
+      [`student_${Date.now()}`, passwordHash, name, age, grade, board || 'CBSE', goals, level, study_time, language, device_type || 'mobile', connectivity || '3g']
     );
 
     const student = await getOne('SELECT * FROM students WHERE id = ?', [result.lastInsertRowid]);
-    res.status(201).json({ ...student, password: undefined });
+    res.status(201).json(withoutPassword(student));
   } catch (err) {
     console.error('Error creating student:', err);
     res.status(500).json({ error: 'Failed to create student' });
@@ -53,8 +55,7 @@ router.get('/:id', async (req, res) => {
     }
 
     res.json({
-      ...student,
-      password: undefined,
+      ...withoutPassword(student),
       current_path: currentPath ? {
         id: currentPath.id,
         generated_at: currentPath.generated_at,

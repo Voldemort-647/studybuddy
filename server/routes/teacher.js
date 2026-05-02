@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { getOne, getAll } from '../db.js';
+import { runSQL, getOne, getAll } from '../db.js';
 import { generateTeacherReport, isAIAvailable } from '../claude.js';
+import { hashPassword, isPasswordHash, verifyPassword } from '../authUtils.js';
 
 const router = Router();
 
@@ -11,7 +12,7 @@ router.post('/login', async (req, res) => {
     
     // Support legacy PIN login
     if (pin) {
-      const teacher = await getOne('SELECT * FROM teachers WHERE password = ?', [pin]);
+      const teacher = await getOne('SELECT * FROM teachers WHERE pin = ? OR password = ?', [pin, pin]);
       if (!teacher) return res.status(401).json({ error: 'Invalid PIN' });
       return res.json({ id: teacher.id, name: teacher.name, class_code: teacher.class_code, school: teacher.school, authenticated: true });
     }
@@ -19,8 +20,14 @@ router.post('/login', async (req, res) => {
     // Username/password login
     if (!username || !password) return res.status(400).json({ error: 'Credentials required' });
 
-    const teacher = await getOne('SELECT * FROM teachers WHERE username = ? AND password = ?', [username, password]);
-    if (!teacher) return res.status(401).json({ error: 'Invalid credentials' });
+    const teacher = await getOne('SELECT * FROM teachers WHERE username = ?', [username.trim()]);
+    if (!teacher || !(await verifyPassword(password, teacher.password))) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    if (!isPasswordHash(teacher.password)) {
+      await runSQL('UPDATE teachers SET password = ? WHERE id = ?', [await hashPassword(password), teacher.id]);
+    }
 
     res.json({ id: teacher.id, name: teacher.name, class_code: teacher.class_code, school: teacher.school, authenticated: true });
   } catch (err) {
@@ -43,7 +50,8 @@ router.get('/students', async (req, res) => {
       students = await getAll('SELECT * FROM students ORDER BY created_at DESC');
     }
     
-    const summaries = students.map(student => {
+    const summaries = [];
+    for (const student of students) {
       const progress = await getAll('SELECT * FROM topic_progress WHERE student_id = ?', [student.id]);
       
       const totalTopics = progress.length;
@@ -80,7 +88,7 @@ router.get('/students', async (req, res) => {
         daysSinceActive = Math.floor((new Date() - new Date(student.last_active_date)) / (1000 * 60 * 60 * 24));
       }
 
-      return {
+      summaries.push({
         id: student.id, name: student.name, grade: student.grade,
         board: student.board, goals: student.goals, level: student.level,
         progress_percent: progressPercent,
@@ -91,8 +99,8 @@ router.get('/students', async (req, res) => {
         last_active: student.last_active_date,
         days_since_active: daysSinceActive,
         is_inactive: daysSinceActive >= 5
-      };
-    });
+      });
+    }
 
     res.json(summaries);
   } catch (err) {

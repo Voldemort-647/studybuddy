@@ -1,5 +1,6 @@
 import { createClient } from "@libsql/client";
 import dotenv from "dotenv";
+import { hashPassword } from "./authUtils.js";
 
 dotenv.config();
 
@@ -155,8 +156,9 @@ export async function initializeDatabase() {
   // Seed Demo Teacher
   const teacherCount = await getOne('SELECT COUNT(*) as count FROM teachers');
   if (teacherCount && Number(teacherCount.count) === 0) {
+    const passwordHash = await hashPassword('1234');
     await runSQL(`INSERT INTO teachers (name, pin, username, password, class_code, school) VALUES (?, ?, ?, ?, ?, ?)`,
-      ['Demo Teacher', '1234', 'teacher1', '1234', 'CLASS-8A', 'Demo School']);
+      ['Demo Teacher', '1234', 'teacher1', passwordHash, 'CLASS-8A', 'Demo School']);
     console.log('👨‍🏫 Demo teacher seeded');
   }
 

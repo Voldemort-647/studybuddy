@@ -59,7 +59,7 @@ export async function teacherSignup(profile) {
 }
 
 export async function teacherLoginAuth(username, password) {
-  const res = await fetch(`${API_BASE}/teacher/login`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ username, password }) });
+  const res = await fetch(`${API_BASE}/auth/teacher/login`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ username, password }) });
   if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Login failed'); }
   const teacher = await res.json();
   localStorage.setItem('pw_teacher', JSON.stringify(teacher));
